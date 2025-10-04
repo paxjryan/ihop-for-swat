@@ -6,7 +6,7 @@ import attacks
 from matplotlib import pyplot as plt
 import utils
 from defense import generate_observations
-from collections import Counter
+from collections import Counter, defaultdict
 from config import PRO_DATASET_FOLDER
 
 
@@ -21,26 +21,100 @@ def load_pro_dataset(dataset_name):
     return dataset, keywords, aux
 
 
-def generate_keyword_queries(mode_query, frequencies, nqr):
-    nkw = frequencies.shape[0]
-    if mode_query == 'iid':
-        assert frequencies.ndim == 1
-        queries = list(np.random.choice(list(range(nkw)), nqr, p=frequencies))
-    elif mode_query == 'markov':
+def generate_keyword_queries(mode_query, frequencies, nqr, nkw):
+    # Added
+    # with open("./../swat/enron/transcripts/transcriptPairedAccess.pkl", "rb") as f:
+    #     transcript = pickle.load(f)
+    #     return transcript
+    # End Added
+
+    # nkw = int(frequencies.shape[0]) # frequencies.shape[0]/2
+    # if mode_query == 'iid':
+    #     assert frequencies.ndim == 1
+    #     # queries = list(np.random.choice(list(range(nkw)), nqr, p=frequencies))
+
+    #     queries = []
+    #     while len(queries) < nqr:
+    #         kwQuery = np.random.choice(list(range(nkw)), p=frequencies[:nkw]*2)
+    #         docQuery = np.random.choice(kwToDocIds[kwQuery]) # for a skewed distribution, include that as p here
+    #         queries.append(kwQuery)
+    #         queries.append(docQuery)
+        
+    #     # Compress space of accessed documents.
+    #     # e.g. let number of non-sampled documents = 30k, number of sampled = 3k. The sampled 3k could be any of the 30k
+    #     # but we want to compress them into indices NUM_KEYWORDS:NUM_KEYWORDS+3000 so they can be used to index into freqMatrix
+    #     docMap = {}
+    #     currentIdx = nkw
+    #     for i in range(nqr):
+    #         if i%2==0: continue # skip keyword accesses
+    #         if queries[i] not in docMap: 
+    #             docMap[queries[i]] = currentIdx
+    #             currentIdx += 1
+    #         queries[i] = docMap[queries[i]]
+        
+    #     # print("queries[0:100] line43 experiment.py:", queries[0:100])
+    #     # print("unique:", len(set(queries)))
+
+    if mode_query == 'markov':
         assert frequencies.ndim == 2
-        ss = utils.get_steady_state(frequencies)
-        queries = np.zeros(nqr, dtype=int)
-        queries[0] = np.random.choice(len(range(nkw)), p=ss)
-        for i in range(1, nqr):
-            queries[i] = np.random.choice(len(range(nkw)), p=frequencies[:, queries[i - 1]])
+        # ss = utils.get_steady_state(frequencies)
+        queries = []
+
+        while len(queries) < nqr:
+            kwQuery = np.random.choice(list(range(nkw)), p=frequencies[:nkw, nkw])
+            # print(kwQuery, frequencies[0, nkw:])
+            # print(len(list(range(nkw, len(frequencies)))), len(frequencies[kwQuery, nkw:]))
+            docQuery = np.random.choice(list(range(nkw, len(frequencies))), p=frequencies[nkw:, kwQuery]) # for a skewed distribution, include that as p here
+            queries.append(kwQuery)
+            queries.append(docQuery)
     elif mode_query == 'each':
         queries = list(np.random.permutation(nkw))[:min(nqr, nkw)]
     else:
         raise ValueError("Frequencies has {:d} dimensions, only 1 or 2 allowed".format(frequencies.ndim))
     return queries
 
+def build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, trends):
+    num_keys = len(chosen_kw_indices) + len(chosen_doc_indices)
+    freq_real = np.zeros((num_keys, num_keys))
+    
+    # filter trends to chosen kws, collapse 52 weeks of trend data to a 1d array
+    trend_matrix = trends[chosen_kw_indices, :]
+    for i_col in range(trend_matrix.shape[1]):
+        if sum(trend_matrix[:, i_col]) == 0:
+            print("The {:d}th column of the trend matrix adds up to zero, making it uniform!".format(i_col))
+            trend_matrix[:, i_col] = 1 / len(chosen_kw_indices)
+        else:
+            trend_matrix[:, i_col] = trend_matrix[:, i_col] / sum(trend_matrix[:, i_col])
+    kw_freq = np.mean(trend_matrix, axis=1)
 
-def build_frequencies_from_file(dataset_name, chosen_kw_indices, keywords, aux_dataset_info, mode_fs):
+    # build transitions from docs to kws
+    for doc_idx in range(len(chosen_kw_indices), num_keys):
+        freq_real[0:len(chosen_kw_indices), doc_idx] = kw_freq
+
+    # build transitions from kws to docs
+    for kw_idx, kw in enumerate(chosen_kw_indices):
+        n = 0
+        for doc_i, doc_n in enumerate(chosen_doc_indices):
+            doc = dataset[doc_n]
+            doc_idx = doc_i + len(chosen_kw_indices)
+            if kw in doc:
+                n += 1
+                freq_real[doc_idx, kw_idx] = 1
+        if (n > 0): # sum should be 1
+            for doc_i, doc in enumerate(chosen_doc_indices):
+                doc_idx = doc_i + len(chosen_kw_indices)
+                freq_real[doc_idx, kw_idx] /= n
+
+    # sanity check
+    # column i = probability vector of transitioning from token i to other tokens (IHOP appendix D)
+    # sum of column i should = 1 
+    import math
+    for r in range(num_keys):
+        assert(math.isclose(sum(freq_real[:, r]), 1))   
+    
+    return freq_real, freq_real, freq_real
+
+def build_frequencies_from_file_old(dataset_name, chosen_kw_indices, keywords, aux_dataset_info, mode_fs):
     def _process_markov_matrix(months):
 
         m = np.zeros((nkw, nkw))
@@ -62,6 +136,7 @@ def build_frequencies_from_file(dataset_name, chosen_kw_indices, keywords, aux_d
         ss = utils.get_steady_state(m_new)
         if any(ss < -1e-8):
             print(ss[ss < 0])
+        print(m_new)
         return m_new
 
     nkw = len(chosen_kw_indices)
@@ -74,7 +149,10 @@ def build_frequencies_from_file(dataset_name, chosen_kw_indices, keywords, aux_d
             else:
                 trend_matrix[:, i_col] = trend_matrix[:, i_col] / sum(trend_matrix[:, i_col])
         if mode_fs == 'same':  # Take last year of data
-            freq_cli = freq_real = freq_adv = np.mean(trend_matrix, axis=1)
+            freq = np.mean(trend_matrix, axis=1)
+            freq /= 2 # only half of the queries are keywords
+            freq_adv = freq_cli = freq_real = np.append(freq, [0.5/nkw for i in range(nkw)])
+            # print("freq_real exp:202:", freq_real)
         elif mode_fs == 'past':  # First half of year for adv, last half is real and client's
             freq_adv = np.mean(trend_matrix[:, -52:-26], axis=1)
             freq_cli = freq_real = np.mean(trend_matrix[:, -26:], axis=1)
@@ -103,8 +181,44 @@ def build_frequencies_from_file(dataset_name, chosen_kw_indices, keywords, aux_d
         raise ValueError("No frequencies for dataset {:s}".format(dataset_name))
     return freq_adv, freq_cli, freq_real
 
-
 def generate_train_test_data(gen_params):
+    # nkw is the number of keywords in the datastore
+    # ndocs is the nubmer of documents in the datastore
+    # likely nkw ~= ndocs
+    nkw = gen_params['nkw']
+    ndoc = gen_params['ndoc']
+    dataset_name = gen_params['dataset']
+    mode_kw = gen_params['mode_kw']
+    mode_ds = gen_params['mode_ds']
+    freq_name = gen_params['freq']
+    mode_fs = gen_params['mode_fs']
+
+    # Load the dataset for this experiment
+    dataset, keywords, aux_dataset_info = load_pro_dataset(dataset_name)
+
+    # use top strategy to pick keywords - picking most popular minimizes likelihood that some kw appears in no doc
+    # permutation = np.random.permutation(len(keywords))
+    chosen_kw_indices = list(range(nkw))
+
+    # use rand strategy to pick docs - could also do with top
+    permutation = np.random.permutation(len(dataset))
+    chosen_doc_indices = list(permutation[:nkw])
+
+    # get Markov transition matrix
+    freq_adv, freq_cli, freq_real = build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, aux_dataset_info['trends'])
+
+    print(nkw+ndoc)
+
+    full_data_adv = {'dataset': dataset,
+                     'keywords': range(nkw+ndoc),
+                     'frequencies': freq_adv,
+                     'mode_query': gen_params['mode_query']}
+    full_data_client = {'dataset': dataset,
+                        'keywords': range(nkw+ndoc),
+                        'frequencies': freq_cli}
+    return full_data_adv, full_data_client, freq_real
+
+def generate_train_test_data_old(gen_params):
     nkw = gen_params['nkw']
     dataset_name = gen_params['dataset']
     mode_kw = gen_params['mode_kw']
@@ -116,10 +230,28 @@ def generate_train_test_data(gen_params):
     dataset, keywords, aux_dataset_info = load_pro_dataset(dataset_name)
     ndoc = len(dataset) if gen_params['ndoc'] == 'full' else min(len(dataset), gen_params['ndoc'])
 
-    # Select the keywords for this experiment
+    # Select the keys [previously: keywords] for this experiment
     if mode_kw == 'top':
+        # Select nkw/2 keywords
         kw_counter = Counter([kw for document in dataset for kw in document])
-        chosen_kw_indices = sorted(kw_counter.keys(), key=lambda x: kw_counter[x], reverse=True)[:nkw]
+        chosen_kw_indices = sorted(kw_counter.keys(), key=lambda x: kw_counter[x], reverse=True)[:int(nkw/2)] # in 'top' mode, this is the same as range(nkw/2)
+        # print("chosen_kw_indices:", chosen_kw_indices)
+
+        # Select nkw/2 documents: downsample document set to reduce keyword universe size
+        chosen_doc_indices = np.random.choice(range(len(dataset)), size=int(nkw/2), replace=False)
+        chosen_doc_indices.sort()
+        print("nkw/2:", int(nkw/2))
+        # print("chosen_doc_indices:", chosen_doc_indices)
+
+        # Get kwId -> docIds containing that kw mapping. Select only documents in chosen_doc_indices
+        kwIdToDocIds = defaultdict(list)
+        # kw_to_kw_id = {kw: kw_id for kw_id, kw in enumerate(keywords)}
+        for doc_id, doc_kws in enumerate(dataset):
+            if (doc_id not in chosen_doc_indices): continue
+            for kw in set(doc_kws):
+                kwIdToDocIds[kw].append(doc_id)
+        print("kwIdToDocIds[0] line149:", kwIdToDocIds[0])
+
     elif mode_kw == 'rand':
         permutation = np.random.permutation(len(keywords))
         chosen_kw_indices = list(permutation[:nkw])
@@ -168,13 +300,13 @@ def generate_train_test_data(gen_params):
         raise ValueError("Frequency name '{:s}' not implemented yet".format(freq_name))
 
     full_data_adv = {'dataset': data_adv,
-                     'keywords': chosen_kw_indices,
+                     'keywords': range(nkw), #chosen_kw_indices,
                      'frequencies': freq_adv,
                      'mode_query': gen_params['mode_query']}
     full_data_client = {'dataset': data_cli,
-                        'keywords': chosen_kw_indices,
+                        'keywords': range(nkw), # chosen_kw_indices,
                         'frequencies': freq_cli}
-    return full_data_adv, full_data_client, freq_real
+    return full_data_adv, full_data_client, freq_real # kwIdToDocIds
 
 
 def run_attack(attack_name, **kwargs):
@@ -206,7 +338,8 @@ def run_experiment(exp_param, seed, debug_mode=False):
                                                                                                     len(full_data_client['dataset']),
                                                                                                     time.time() - t0))
 
-    real_queries = generate_keyword_queries(exp_param.gen_params['mode_query'], freq_real, exp_param.gen_params['nqr'])
+    real_queries = generate_keyword_queries(exp_param.gen_params['mode_query'], freq_real, exp_param.gen_params['nqr'], exp_param.gen_params['nkw'])
+    # print("real_queries:", real_queries[0:100])
     v_print("Generated {:d} real queries ({:.1f} secs)".format(len(real_queries), time.time() - t0))
 
     observations, bw_overhead, real_and_dummy_queries = generate_observations(full_data_client, exp_param.def_params, real_queries)

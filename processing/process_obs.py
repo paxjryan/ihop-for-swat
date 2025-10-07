@@ -3,7 +3,7 @@ from collections import Counter
 import scipy.stats
 from sys import float_info
 from sklearn.cluster import KMeans
-
+import matplotlib.pyplot as plt #added
 
 def traces_to_binary(traces_flattened, n_docs_test):
     # TODO: do this more efficiently
@@ -64,6 +64,8 @@ def compute_Fobs(def_name, token_trace, n_tokens):
     nq_per_tok = np.zeros(n_tokens)
     counter = Counter(token_trace[:-1])  # We do not take the last one, because we do not know the transition from that one
 
+    # print("token_trace[0:100]:", token_trace[0:100])
+
     if def_name != 'pancake':
         mj_test = np.histogram2d(token_trace[1:], token_trace[:-1], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0] / (len(token_trace) - 1)
     else:
@@ -71,11 +73,32 @@ def compute_Fobs(def_name, token_trace, n_tokens):
         for i in range(3):
             for j in range(3):
                 mj_test += np.histogram2d(token_trace[3 + i::3], token_trace[j:-3:3], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0]
+    
+    # values are hardcoded for now while I determine how to get total number of kw/doc/dummy replicas
+    # 0:kw_replicas are keyword replicas. kw:replicas:real_replicas are document replicas. real_replicas: are dummy replicas
+    kw_replicas = 397
+    real_replicas = 792
+    doc_replicas = real_replicas-kw_replicas
+
+    # Set transition frequencies from kw->kw and doc->doc replicas in Fobs to 0
+    # mj_test[0:kw_replicas, 0:kw_replicas] = np.zeros((kw_replicas, kw_replicas))
+    # mj_test[kw_replicas:real_replicas, kw_replicas:real_replicas] = np.zeros((doc_replicas,doc_replicas))
+    
+    # Set transition frequencies from dummy->any and any->dummy replicas in Fobs to 0
+    # (not convinced about this)
+    # mj_test[real_replicas:, :] = np.zeros((1000-real_replicas, 1000))
+    # mj_test[:, real_replicas:] = np.zeros((1000, 1000-real_replicas))
 
     for j in range(n_tokens):
         nq_per_tok[j] = np.sum(mj_test[:, j])
         if np.sum(mj_test[:, j]) > 0:
             Fobs[:, j] = mj_test[:, j] / np.sum(mj_test[:, j])
+
+    # Display heatmap of Fobs
+    plt.imshow(Fobs, cmap='viridis', interpolation='nearest')
+    plt.colorbar()
+    plt.title("Heatmap with Matplotlib")
+    plt.show()
 
     return nq_per_tok, Fobs
 
@@ -111,8 +134,29 @@ def process_traces(obs, aux, def_params):
                 seen_ids_to_token_id[id] = token_id
                 token_info[token_id] = vol
                 token_id += 1
-            token_traces.append(seen_ids_to_token_id[id])
+            # token_traces.append(seen_ids_to_token_id[id])
+            # Don't rename seen tokens, so when we generate Fobs we know which replicas are kws/docs/dummies
+            token_traces.append(id)
         return token_traces, token_info
+    
+        # token_traces = []
+        # seen_ids_to_token_id = {}
+        # token_info = {}
+        # kw_token_id = 0
+        # doc_token_id = 0
+        # # print("process_obs, line 110, delete that line!")
+        # print("len(traces), should be num queries:", len(traces))
+        # for id, vol in traces:
+        #     if id not in seen_ids_to_token_id:
+        #         # token_id = id
+        #         token_id = kw_token_id if id < len(traces)/6 else doc_token_id 
+        #         seen_ids_to_token_id[id] = token_id
+        #         token_info[token_id] = vol
+        #         if id < len(traces)/6: kw_token_id += 1
+        #         else: doc_token_id += 1
+        #     token_traces.append(seen_ids_to_token_id[id])
+        # print(seen_ids_to_token_id)
+        # return token_traces, token_info
 
     def _process_traces_by_clustering_given_access_pattern(traces, nclusters, ndocs_obs):
         """tag_info is a dict [tag -> cluster center]"""

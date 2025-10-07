@@ -79,7 +79,13 @@ def generate_observations(full_data_client, def_params, real_queries):
         trace_type = 'tok_vol'
         freal = utils.get_steady_state(full_data_client['frequencies']) if full_data_client['frequencies'].ndim == 2 else full_data_client['frequencies']
         prob_reals, prob_dummies, replicas_per_kw = utils.compute_pancake_parameters(nkw, freal)
-        permutation = np.random.permutation(2 * nkw)
+
+        # some imprecision in calculating prob_reals above causes some values to be very small negative numbers,
+        # which then was causing errors later in the attack when we expect probabilities to be nonnegative
+        prob_reals[prob_reals<0] = -prob_reals[prob_reals<0]
+
+        # We prevent pancake from shuffling the order of replicas to keep keyword replicas, document replicas, and dummy replicas in their own continuous blocks
+        permutation = list(range(2*nkw)) #np.random.permutation(2 * nkw)
         aux = [0] + list(np.cumsum(replicas_per_kw, dtype=int))
         kw_id_to_replica = [tuple(permutation[aux[i]: aux[i + 1]]) for i in range(len(aux) - 1)]
 
@@ -105,6 +111,11 @@ def generate_observations(full_data_client, def_params, real_queries):
 
         for kw_id in trace_no_replicas:
             traces.append((np.random.choice(kw_id_to_replica[kw_id]), 1))  # Volume is 1
+        
+        # print("kw_id_to_replica[250]", kw_id_to_replica[250])
+        # print("real_queries[0:100]", real_queries[0:100])
+        # print("indices_for_each_true_message[0:100]", indices_for_each_true_message[0:100])
+        # print("traces[0:100]:", traces[0:100]) #np.take(traces, indices_for_each_true_message)[0:100])
 
         real_and_dummy_queries = trace_no_replicas
 

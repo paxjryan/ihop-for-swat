@@ -23,7 +23,7 @@ if __name__ == "__main__":
     ###### Simple Enron experiment; accuracy for seed=0 should be 0.058, 0.174, 0.904, and 0.952 for niters=0, 10, 100, and 1000, respectively.
     # exp_params.set_general_params(dataset='enron-full', nkw=500, nqr=500, ndoc=30_000, freq='file', mode_ds='splitn10000',
     #                               mode_fs='past', mode_kw='rand', mode_query='iid')
-    exp_params.set_defense_params('none')
+    # exp_params.set_defense_params('none')
     # attack_list = [('ihop', {'mode': 'Vol', 'niters': 1000, 'pfree': 0.25})]
     # niter_list = [0, 10, 100, 1000]
 
@@ -34,12 +34,10 @@ if __name__ == "__main__":
     # exp_params.set_general_params(dataset='enron-full', nkw=1000, nqr=1000, ndoc=30_000, freq='none', mode_ds='splitn10000', mode_fs='past', mode_kw='rand', mode_query='each')
 
     # Added
-    # This is what we want to run and have it achieve high accuracy
-    exp_params.set_defense_params('none')
-    exp_params.set_general_params(dataset='enron-full', nkw=500, ndoc=500, nqr=100_000, freq='file', mode_ds='same', mode_fs='same', mode_kw='rand', mode_query='markov')
-    attack_list = [('ihop', {'mode': 'Freq', 'niters': 1000, 'pfree': 0.25})] # may want to go up to 10k - see IHOP fig. 9
+    exp_params.set_defense_params('pancake')
+    exp_params.set_general_params(dataset='enron-full', nkw=250, ndoc=250, nqr=100_000, freq='file', mode_ds='same', mode_fs='same', mode_kw='rand', mode_query='markov') # IHOP also does nqr=500
+    attack_list = [('ihop', {'mode': 'Freq', 'niters': 1000, 'pfree': 0.25})] # may want to go up to 10k iters? - see IHOP fig. 9
     niter_list = [0, 10, 100, 1000]
-    # exp_params.set_general_params(dataset='enron-full', nkw=500, nqr=100_000, ndoc=2_000, freq='file', mode_ds='same', mode_fs='same', mode_kw='top', mode_query='iid')
 
     ##### DEFENSE EXAMPLES
     # exp_params.set_defense_params('none')

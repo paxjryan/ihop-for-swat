@@ -30,9 +30,10 @@ def generate_observations(full_data_client, def_params, real_queries):
     if def_params['name'] == 'none':
 
         trace_type = 'ap_unique'
-        token_ids = np.random.permutation(np.max(real_queries) + 1)
+        # token_ids = np.random.permutation(np.max(real_queries) + 1)
         for kw_id in real_queries:
-            traces.append((token_ids[kw_id], inverted_index[kw_id]))
+            # traces.append((token_ids[kw_id], inverted_index[kw_id]))
+            traces.append((kw_id, inverted_index[kw_id]))
         bw_overhead = 1
         real_and_dummy_queries = real_queries
 
@@ -79,6 +80,7 @@ def generate_observations(full_data_client, def_params, real_queries):
         trace_type = 'tok_vol'
         freal = utils.get_steady_state(full_data_client['frequencies']) if full_data_client['frequencies'].ndim == 2 else full_data_client['frequencies']
         prob_reals, prob_dummies, replicas_per_kw = utils.compute_pancake_parameters(nkw, freal)
+        print("sum(replicas_per_kw[0:250])", sum(replicas_per_kw[0:250]))
 
         # some imprecision in calculating prob_reals above causes some values to be very small negative numbers,
         # which then was causing errors later in the attack when we expect probabilities to be nonnegative

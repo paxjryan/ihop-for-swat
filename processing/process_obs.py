@@ -95,7 +95,7 @@ def compute_Fobs(def_name, token_trace, n_tokens):
             Fobs[:, j] = mj_test[:, j] / np.sum(mj_test[:, j])
 
     # Display heatmap of Fobs
-    plt.imshow(Fobs, cmap='viridis', interpolation='nearest')
+    plt.imshow(Fobs, cmap='Greys_r', interpolation='nearest')
     plt.colorbar()
     plt.title("Heatmap with Matplotlib")
     plt.show()
@@ -111,6 +111,9 @@ def process_traces(obs, aux, def_params):
         seen_id_to_token_id = {}
         token_info = {}
         token_id = 0
+        ids = [x[0] for x in traces]
+        print(set(ids))
+        print(len(set(ids)))
         for id, ap in traces:
             ap_sorted = tuple(sorted(ap))
             if id not in seen_id_to_token_id:
@@ -118,6 +121,8 @@ def process_traces(obs, aux, def_params):
                 token_info[token_id] = ap_sorted
                 token_id += 1
             token_trace.append(seen_id_to_token_id[id])
+            # Don't rename seen tokens, so when we generate Fobs we know which replicas are kws/docs/dummies
+            # token_trace.append(id)
         return token_trace, token_info
 
     def _process_traces_with_search_pattern_leakage_given_volume(traces):

@@ -57,6 +57,8 @@ def generate_keyword_queries(mode_query, frequencies, nqr, nkw):
 
         ## TRANSCRIPT GENERATION
         queries = []
+        # queries += list(reversed(range(nkw*2)))  # hardcoding this for now for total number of keys, will break if nkw != ndoc
+                                            # doing this to try to force every key to be accesssed at least once
 
         while len(queries) < nqr:
             # pick a keyword
@@ -111,6 +113,8 @@ def build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, 
                 if kw in doc:
                     freq_real[doc_idx, kw_idx] = 1
                     doc_selected_for_kw = True
+                    if kw_idx == 0: print("doc for kw0 is", doc_idx)
+        print(freq_real[:,0])
     else:
         # transition probability from kw for n docs containing it is 1/n each
         for kw_idx, kw in enumerate(chosen_kw_indices):

@@ -34,7 +34,7 @@ if __name__ == "__main__":
     # exp_params.set_general_params(dataset='enron-full', nkw=1000, nqr=1000, ndoc=30_000, freq='none', mode_ds='splitn10000', mode_fs='past', mode_kw='rand', mode_query='each')
 
     # Added
-    exp_params.set_defense_params('pancake')
+    exp_params.set_defense_params('none')
     exp_params.set_general_params(dataset='enron-full', nkw=250, ndoc=250, nqr=100_000, freq='file', mode_ds='same', mode_fs='same', mode_kw='rand', mode_query='markov') # IHOP also does nqr=500
     attack_list = [('ihop', {'mode': 'Freq', 'niters': 1000, 'pfree': 0.25})] # may want to go up to 10k iters? - see IHOP fig. 9
     niter_list = [0, 10, 100, 1000]

@@ -123,6 +123,8 @@ def ihop_attack(obs, aux, exp_params):
         if run_multiple_niters and k + 1 in niter_list:
             rep_pred_tok_list.append(replica_predictions_for_each_token.copy())
 
+        if (k%10==0): print(k)
+
         if (k + 1) % (n_iters // 10) == 0:
             print("{:d}".format(((k + 1) // (n_iters // 10)) - 1), end='', flush=True)
 

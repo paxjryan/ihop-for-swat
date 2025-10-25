@@ -3,6 +3,7 @@ from processing.process_obs import process_traces, compute_fobs, compute_Vobs, c
 from processing.process_aux import get_faux, get_Vaux, get_Fexp_and_mapping, get_Vexp
 import utils
 from scipy.optimize import linear_sum_assignment as hungarian
+from config import *
 
 
 def get_update_coefficients_functions(token_trace, token_info, aux, obs, exp_params):
@@ -17,7 +18,6 @@ def get_update_coefficients_functions(token_trace, token_info, aux, obs, exp_par
         return cost_freq
 
     def _build_cost_Freq_some_fixed(free_keywords, free_tags, fixed_keywords, fixed_tags):
-
         cost_matrix = np.zeros((len(free_keywords), len(free_tags)))
         ss_aux = utils.get_steady_state(Fexp)
 
@@ -34,9 +34,33 @@ def get_update_coefficients_functions(token_trace, token_info, aux, obs, exp_par
         counts_from_others_test = Fobs_counts[np.ix_(free_tags, free_tags)].sum(axis=1) - Fobs_counts[np.ix_(free_tags, free_tags)].diagonal()
         cost_matrix -= counts_from_others_test * np.log(np.array([ss_from_others_train]).T)
 
+        # Heatmap for d_{i,j} matrix
+        # import matplotlib.pyplot as plt #added
+        # plt.figure()
+        # plt.imshow(cost_matrix, cmap='Greys_r', interpolation='nearest')
+        # cbar = plt.colorbar()
+        # cbar.set_label("cost")
+        # plt.title("d_{i,j} for " + CORR_LEVEL + " corr")
+        # plt.xlabel("Key From")
+        # plt.ylabel("Key To")
+        # plt.show()
+        # plt.close()
+        # old_cost_matrix = cost_matrix
+
         for tag, kw in zip(fixed_tags, fixed_keywords):
             cost_matrix -= Fobs_counts[free_tags, tag] * np.log(np.array([Fexp[free_keywords, kw]]).T)
             cost_matrix -= Fobs_counts[tag, free_tags] * np.log(np.array([Fexp[kw, free_keywords]]).T)
+
+        # Heatmap for c_{i,i',j,j'} matrix
+        # plt.figure()
+        # plt.imshow(cost_matrix - old_cost_matrix, cmap='Greys_r', interpolation='nearest')
+        # cbar = plt.colorbar()
+        # cbar.set_label("cost")
+        # plt.title("c_{i,i',j,j'} for " + CORR_LEVEL + " corr")
+        # plt.xlabel("Key From")
+        # plt.ylabel("Key To")
+        # plt.show()
+        # plt.close()
 
         return cost_matrix
 
@@ -80,6 +104,7 @@ def ihop_attack(obs, aux, exp_params):
     n_iters = att_params['niters']
     nrep = len(rep_to_kw)
     ntok = len(token_info)
+    # print("nrep:", nrep, "ntok:", ntok)
 
     # 1) PROCESS GROUND-TRUTH INFORMATION
     if 'ground_truth_queries' in aux and len(aux['ground_truth_queries']) > 0:
@@ -115,6 +140,18 @@ def ihop_attack(obs, aux, exp_params):
         free_replicas = [rep for rep in unknown_reps if rep not in fixed_reps]
 
         c_matrix = compute_coef_matrix(free_replicas, free_tokens, fixed_reps, fixed_tokens)
+
+        # Visualize c_matrix       
+        # import matplotlib.pyplot as plt #added
+        # plt.figure()
+        # plt.imshow(c_matrix, cmap='Greys_r', interpolation='nearest')
+        # cbar = plt.colorbar()
+        # cbar.set_label("cost")
+        # plt.title("c_matrix for " + CORR_LEVEL + "" corr")
+        # plt.xlabel("Key From")
+        # plt.ylabel("Key To")
+        # plt.show()
+        # plt.close()
 
         row_ind, col_ind = hungarian(c_matrix)
         for j, i in zip(col_ind, row_ind):

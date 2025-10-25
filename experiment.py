@@ -7,10 +7,7 @@ from matplotlib import pyplot as plt
 import utils
 from defense import generate_observations
 from collections import Counter, defaultdict
-from config import PRO_DATASET_FOLDER
-
-HIGH_CORR = False
-
+from config import *
 
 def load_pro_dataset(dataset_name):
     full_path = os.path.join(PRO_DATASET_FOLDER, dataset_name + '.pkl')
@@ -24,41 +21,12 @@ def load_pro_dataset(dataset_name):
 
 
 def generate_keyword_queries(mode_query, frequencies, nqr, nkw):
-    # nkw = int(frequencies.shape[0]) # frequencies.shape[0]/2
-    # if mode_query == 'iid':
-    #     assert frequencies.ndim == 1
-    #     # queries = list(np.random.choice(list(range(nkw)), nqr, p=frequencies))
-
-    #     queries = []
-    #     while len(queries) < nqr:
-    #         kwQuery = np.random.choice(list(range(nkw)), p=frequencies[:nkw]*2)
-    #         docQuery = np.random.choice(kwToDocIds[kwQuery]) # for a skewed distribution, include that as p here
-    #         queries.append(kwQuery)
-    #         queries.append(docQuery)
-        
-    #     # Compress space of accessed documents.
-    #     # e.g. let number of non-sampled documents = 30k, number of sampled = 3k. The sampled 3k could be any of the 30k
-    #     # but we want to compress them into indices NUM_KEYWORDS:NUM_KEYWORDS+3000 so they can be used to index into freqMatrix
-    #     docMap = {}
-    #     currentIdx = nkw
-    #     for i in range(nqr):
-    #         if i%2==0: continue # skip keyword accesses
-    #         if queries[i] not in docMap: 
-    #             docMap[queries[i]] = currentIdx
-    #             currentIdx += 1
-    #         queries[i] = docMap[queries[i]]
-        
-    #     # print("queries[0:100] line43 experiment.py:", queries[0:100])
-    #     # print("unique:", len(set(queries)))
-
     # mode_query should always be 'markov' for the scenarios we consider.
     if mode_query == 'markov':
         assert frequencies.ndim == 2
 
         ## TRANSCRIPT GENERATION
         queries = []
-        # queries += list(reversed(range(nkw*2)))  # hardcoding this for now for total number of keys, will break if nkw != ndoc
-                                            # doing this to try to force every key to be accesssed at least once
 
         while len(queries) < nqr:
             # pick a keyword
@@ -67,12 +35,15 @@ def generate_keyword_queries(mode_query, frequencies, nqr, nkw):
             # print(len(list(range(nkw, len(frequencies)))), len(frequencies[kwQuery, nkw:]))
 
             # pick a document based on the keyword
-            if HIGH_CORR: 
-                # always take the *first* document containing the keyword
-                docQuery = np.argwhere(frequencies[nkw:, kwQuery])[0][0]+nkw
-            else: 
+            # if HIGH_CORR: 
+            #     # always take the *first* document containing the keyword
+            #     docQuery = np.argwhere(frequencies[nkw:, kwQuery])[0][0]+nkw
+            #     if (len(queries) < 10): print(np.argwhere(frequencies[nkw:, kwQuery]))
+            # else: 
                 # pick uniformly among the documents containing the keyword
-                docQuery = np.random.choice(list(range(nkw, len(frequencies))), p=frequencies[nkw:, kwQuery]) # for a skewed distribution, include that as p here
+            # if len(queries) == 0: print(frequencies[nkw:, kwQuery])
+            docQuery = np.random.choice(list(range(nkw, len(frequencies))), p=frequencies[nkw:, kwQuery]) # for a skewed distribution, include that as p here
+
             queries.append(kwQuery)
             queries.append(docQuery)
 
@@ -101,11 +72,19 @@ def build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, 
         freq_real[0:len(chosen_kw_indices), doc_idx] = kw_freq
 
     # build transitions from kws to docs
-    if HIGH_CORR:
+    if CORR_LEVEL == 'high':
         # transition probability from kw to first doc containing it is 1, else 0
         for kw_idx, kw in enumerate(chosen_kw_indices):
+            # Alternate strategy: assign kw 0 to doc 250, 1 to 251, etc
+            # This ignores which kws are in which doc but does ensure that all documents get used
+            # freq_real[kw_idx+250,kw_idx] = 1
+
             doc_selected_for_kw = False
-            for doc_i, doc_n in enumerate(chosen_doc_indices):
+
+            # select random doc containing this kw if HIGH_CORR_PERMUTE, else select first doc containing it
+            docs = np.random.permutation(list(enumerate(chosen_doc_indices))) if HIGH_CORR_PERMUTE else enumerate(chosen_doc_indices)
+
+            for doc_i, doc_n in docs:
                 if doc_selected_for_kw: continue
 
                 doc = dataset[doc_n]
@@ -114,25 +93,33 @@ def build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, 
                     freq_real[doc_idx, kw_idx] = 1
                     doc_selected_for_kw = True
                     if kw_idx == 0: print("doc for kw0 is", doc_idx)
-        print(freq_real[:,0])
+        # print(freq_real[:,0])
     else:
-        # transition probability from kw for n docs containing it is 1/n each
+        # transition probability from kw for n docs containing it is default 1/n each
+        exp_factor = 1.0
+
+        # possibly weight later indices higher
+        if CORR_LEVEL == 'mid': 
+            exp_factor = 1.2
+
         for kw_idx, kw in enumerate(chosen_kw_indices):
-            n = 0
+            weight = 1
+            totalOfWeights = 0
             for doc_i, doc_n in enumerate(chosen_doc_indices):
                 doc = dataset[doc_n]
                 doc_idx = doc_i + len(chosen_kw_indices)
                 if kw in doc:
-                    n += 1
-                    freq_real[doc_idx, kw_idx] = 1
-            if (n > 0): # sum should be 1
-                for doc_i, doc in enumerate(chosen_doc_indices):
-                    doc_idx = doc_i + len(chosen_kw_indices)
-                    freq_real[doc_idx, kw_idx] /= n
+                    weight *= exp_factor
+                    freq_real[doc_idx, kw_idx] = weight
+                    totalOfWeights += weight
+            # normalize so probabilities for each kw sum to 1
+            for doc_i, doc in enumerate(chosen_doc_indices):
+                doc_idx = doc_i + len(chosen_kw_indices)
+                freq_real[doc_idx, kw_idx] /= totalOfWeights
 
     # sanity check
     # column i = probability vector of transitioning from token i to other tokens (IHOP appendix D)
-    # sum of column i should = 1 
+    # sum of column i should be 1 
     import math
     for r in range(num_keys):
         assert(math.isclose(sum(freq_real[:, r]), 1))   
@@ -367,6 +354,13 @@ def run_experiment(exp_param, seed, debug_mode=False):
     observations, bw_overhead, real_and_dummy_queries = generate_observations(full_data_client, exp_param.def_params, real_queries)
     v_print("Applied defense ({:.1f} secs)".format(time.time() - t0))
 
+    from collections import Counter
+    ctr = Counter(real_and_dummy_queries)
+    counts = [0] * (max(real_and_dummy_queries) + 1)
+    counts = [ctr[item] for item in range(max(real_and_dummy_queries) + 1)]
+    counts = list([c / len(real_and_dummy_queries) for c in counts]) # normalize to between 0 and 1
+    # print(len(counts), counts)
+
     keyword_predictions_for_each_query = run_attack(exp_param.att_params['name'], obs=observations, aux=full_data_adv, exp_params=exp_param)
     v_print("Done running attack ({:.1f} secs)".format(time.time() - t0))
     time_exp = time.time() - t0
@@ -380,12 +374,45 @@ def run_experiment(exp_param, seed, debug_mode=False):
         return accuracy, accuracy_un, time_exp
     elif type(keyword_predictions_for_each_query) == list and type(keyword_predictions_for_each_query[0]) == list:
         acc_list, acc_un_list = [], []
+        acc_dict_list = [] # ADDED
         for pred in keyword_predictions_for_each_query:
             acc_vector = np.array([1 if query == prediction else 0 for query, prediction in zip(real_and_dummy_queries, pred)])
-            # print(np.mean(np.array([1 if query == prediction else 0 for query, prediction in zip(real_and_dummy_queries, pred)])), np.mean(np.array([1 if real == prediction else 0 for real, prediction in zip(real_and_dummy_queries, pred)])))
             acc_un_vector = np.array([np.mean(acc_vector[real_and_dummy_queries == i]) for i in set(real_and_dummy_queries)])
             acc_list.append(np.mean(acc_vector))
             acc_un_list.append(np.mean(acc_un_vector))
+
+            if DISPLAY_ACC_VECTORS or SAVE_ACC_VECTORS: 
+                acc_dict = [0] * (max(real_and_dummy_queries) + 1)
+                for i, acc in enumerate(acc_vector):
+                    acc_dict[real_and_dummy_queries[i]] = acc * max(counts) # multiplying by max(counts) is a bit of a hack to get the axis to look nice for the graph - technically could just be acc
+                acc_dict_list.append(acc_dict)
+                print("len(acc_dict):", len(acc_dict))
+                # print("acc_dict:", "".join(acc_dict))
+        
+        # ADDED
+        if DISPLAY_ACC_VECTORS or SAVE_ACC_VECTORS:    
+            # Stack into a 2D array
+            acc_dict_list.append(counts)
+            print(acc_dict_list)
+            data = np.array(acc_dict_list)
+
+            # Plot
+            from matplotlib.colors import PowerNorm
+            plt.figure(figsize=(12, 2))
+            plt.imshow(data, aspect='auto', cmap='gray_r', interpolation='none', norm=PowerNorm(gamma=0.5))
+            plt.yticks(range(len(NITER_LIST)+1), list([str(x) + " Iters" for x in NITER_LIST]) + ["Transcript Frequency"])
+            print(list([str(x) + " Iters" for x in NITER_LIST]) + ["Transcript Frequency"])
+            plt.xlabel("Index")
+            plt.title("IHOP Accuracy Vectors by Iteration")
+            plt.colorbar(label="True / False")
+            plt.tight_layout()
+            if DISPLAY_ACC_VECTORS:
+                plt.show()
+            if SAVE_ACC_VECTORS:
+                plt.savefig(EXPERIMENT_FOLDER + "acc_vector" + str(seed) + ".png")
+                
+            v_print("Done generating graphs ({:.1f} secs)".format(time.time() - t0))
+
         return acc_list, acc_un_list, time_exp
     else:
         return -1, -1, -1

@@ -4,6 +4,7 @@ import scipy.stats
 from sys import float_info
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt #added
+from config import *
 
 def traces_to_binary(traces_flattened, n_docs_test):
     # TODO: do this more efficiently
@@ -74,20 +75,21 @@ def compute_Fobs(def_name, token_trace, n_tokens):
             for j in range(3):
                 mj_test += np.histogram2d(token_trace[3 + i::3], token_trace[j:-3:3], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0]
     
-    # values are hardcoded for now while I determine how to get total number of kw/doc/dummy replicas
-    # 0:kw_replicas are keyword replicas. kw:replicas:real_replicas are document replicas. real_replicas: are dummy replicas
-    kw_replicas = 397
-    real_replicas = 792
-    doc_replicas = real_replicas-kw_replicas
+    if MOD_FOBS:
+        # values are hardcoded for now while I determine how to get total number of kw/doc/dummy replicas
+        # 0:kw_replicas are keyword replicas. [kw:replicas:real_replicas] are document replicas. [real_replicas:] are dummy replicas
+        kw_replicas = 250 #397
+        real_replicas = 373 #792
+        doc_replicas = real_replicas-kw_replicas
 
-    # Set transition frequencies from kw->kw and doc->doc replicas in Fobs to 0
-    # mj_test[0:kw_replicas, 0:kw_replicas] = np.zeros((kw_replicas, kw_replicas))
-    # mj_test[kw_replicas:real_replicas, kw_replicas:real_replicas] = np.zeros((doc_replicas,doc_replicas))
-    
-    # Set transition frequencies from dummy->any and any->dummy replicas in Fobs to 0
-    # (not convinced about this)
-    # mj_test[real_replicas:, :] = np.zeros((1000-real_replicas, 1000))
-    # mj_test[:, real_replicas:] = np.zeros((1000, 1000-real_replicas))
+        # Set transition frequencies from kw->kw and doc->doc replicas in Fobs to 0
+        mj_test[0:kw_replicas, 0:kw_replicas] = np.zeros((kw_replicas, kw_replicas))
+        mj_test[kw_replicas:real_replicas, kw_replicas:real_replicas] = np.zeros((doc_replicas,doc_replicas))
+        
+        # Set transition frequencies from dummy->any and any->dummy replicas in Fobs to 0
+        # (not convinced about this)
+        # mj_test[real_replicas:, :] = np.zeros((1000-real_replicas, 1000))
+        # mj_test[:, real_replicas:] = np.zeros((1000, 1000-real_replicas))
 
     for j in range(n_tokens):
         nq_per_tok[j] = np.sum(mj_test[:, j])
@@ -95,10 +97,19 @@ def compute_Fobs(def_name, token_trace, n_tokens):
             Fobs[:, j] = mj_test[:, j] / np.sum(mj_test[:, j])
 
     # Display heatmap of Fobs
-    plt.imshow(Fobs, cmap='Greys_r', interpolation='nearest')
-    plt.colorbar()
-    plt.title("Heatmap with Matplotlib")
-    plt.show()
+    if DISPLAY_OBS_GRAPH or SAVE_OBS_GRAPH:
+        plt.figure()
+        plt.imshow(Fobs, cmap='Greys_r', interpolation='nearest') # vmax=0.03
+        cbar = plt.colorbar()
+        cbar.set_label("Correlation")
+        plt.title("Fobs")
+        plt.xlabel("Key From")
+        plt.ylabel("Key To")
+        if DISPLAY_AUX_GRAPH:
+            plt.show()
+        if SAVE_AUX_GRAPH:
+            plt.savefig(EXPERIMENT_FOLDER + "obs.png")
+        plt.close()
 
     return nq_per_tok, Fobs
 
@@ -111,9 +122,7 @@ def process_traces(obs, aux, def_params):
         seen_id_to_token_id = {}
         token_info = {}
         token_id = 0
-        ids = [x[0] for x in traces]
-        print(set(ids))
-        print(len(set(ids)))
+        
         for id, ap in traces:
             ap_sorted = tuple(sorted(ap))
             if id not in seen_id_to_token_id:
@@ -122,7 +131,7 @@ def process_traces(obs, aux, def_params):
                 token_id += 1
             token_trace.append(seen_id_to_token_id[id])
             # Don't rename seen tokens, so when we generate Fobs we know which replicas are kws/docs/dummies
-            # token_trace.append(id)
+            #token_trace.append(id)
         return token_trace, token_info
 
     def _process_traces_with_search_pattern_leakage_given_volume(traces):

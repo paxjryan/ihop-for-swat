@@ -4,9 +4,10 @@ from collections import Counter
 import scipy.stats
 from sys import float_info
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt #added
+from config import *
 
 epsilon = 1e-20
-
 
 def get_faux(aux):
     nkw = len(aux['keywords'])
@@ -33,6 +34,22 @@ def get_Faux(aux):
         Faux = np.ones((nkw, nkw)) / nkw
     else:
         raise ValueError("freq_type = {:s} nor recognized by freq".format(aux['freq_type']))
+    
+    if DISPLAY_AUX_GRAPH or SAVE_AUX_GRAPH:
+        plt.figure()
+        from matplotlib.colors import PowerNorm
+        plt.imshow(Faux, cmap='Greys_r', interpolation='nearest', norm=PowerNorm(gamma=0.5)) #, vmax=0.03)
+        cbar = plt.colorbar()
+        cbar.set_label("Correlation")
+        plt.title("Faux")
+        plt.xlabel("Key From")
+        plt.ylabel("Key To")
+        if DISPLAY_AUX_GRAPH:
+            plt.show()
+        if SAVE_AUX_GRAPH:
+            plt.savefig(EXPERIMENT_FOLDER + "aux.png")
+        plt.close()
+
     return Faux
 
 

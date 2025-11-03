@@ -121,6 +121,7 @@ def ihop_attack(obs, aux, exp_params):
     replica_predictions_for_each_token = {token: rep for token, rep in zip(ground_truth_tokens, ground_truth_reps)}
     for j, i in zip(col_ind, row_ind):
         replica_predictions_for_each_token[unknown_toks[j]] = unknown_reps[i]
+    # print("replica predictions:", dict(sorted(replica_predictions_for_each_token.items())))
 
     if 'niter_list' in att_params:
         run_multiple_niters, niter_list, rep_pred_tok_list = True, att_params['niter_list'], []
@@ -160,10 +161,10 @@ def ihop_attack(obs, aux, exp_params):
         if run_multiple_niters and k + 1 in niter_list:
             rep_pred_tok_list.append(replica_predictions_for_each_token.copy())
 
-        if (k%10==0): print(k)
+        if (k%10==0): print(str(k) + " iters")
 
-        if (k + 1) % (n_iters // 10) == 0:
-            print("{:d}".format(((k + 1) // (n_iters // 10)) - 1), end='', flush=True)
+        # if (k + 1) % (n_iters // 10) == 0:
+        #     print("{:d}".format(((k + 1) // (n_iters // 10)) - 1), end='', flush=True)
 
     if not run_multiple_niters:
         keyword_predictions_for_each_query = [rep_to_kw[replica_predictions_for_each_token[token]] for token in token_trace]

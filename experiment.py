@@ -67,6 +67,18 @@ def build_frequencies_from_file(chosen_kw_indices, chosen_doc_indices, dataset, 
             trend_matrix[:, i_col] = trend_matrix[:, i_col] / sum(trend_matrix[:, i_col])
     kw_freq = np.mean(trend_matrix, axis=1)
 
+    # # Create bar chart
+    # plt.figure(figsize=(12, 6))
+    # plt.bar(np.arange(len(kw_freq)), np.sort(kw_freq), color='skyblue')
+
+    # # Add labels and title
+    # plt.title("Google Trends Access Frequency")
+    # plt.xlabel("Keyword")
+    # plt.ylabel("Frequency")
+
+    # # Show plot
+    # plt.show()
+
     # build transitions from docs to kws. No matter which doc, probability vector of transiting to any kw is kw_freq
     for doc_idx in range(len(chosen_kw_indices), num_keys):
         freq_real[0:len(chosen_kw_indices), doc_idx] = kw_freq
@@ -342,7 +354,7 @@ def run_experiment(exp_param, seed, debug_mode=False):
     v_print = print if debug_mode else lambda *a, **k: None
 
     t0 = time.time()
-    np.random.seed(seed)
+    np.random.seed(BASE_SEED + seed)
     full_data_adv, full_data_client, freq_real = generate_train_test_data(exp_param.gen_params)
     v_print("Generated train-test data: adv dataset {:d}, client dataset {:d} ({:.1f} secs)".format(len(full_data_adv['dataset']),
                                                                                                     len(full_data_client['dataset']),
@@ -387,7 +399,6 @@ def run_experiment(exp_param, seed, debug_mode=False):
                     acc_dict[real_and_dummy_queries[i]] = acc * max(counts) # multiplying by max(counts) is a bit of a hack to get the axis to look nice for the graph - technically could just be acc
                 acc_dict_list.append(acc_dict)
                 print("len(acc_dict):", len(acc_dict))
-                # print("acc_dict:", "".join(acc_dict))
         
         # ADDED
         if DISPLAY_ACC_VECTORS or SAVE_ACC_VECTORS:    
@@ -412,6 +423,8 @@ def run_experiment(exp_param, seed, debug_mode=False):
                 plt.savefig(EXPERIMENT_FOLDER + "acc_vector" + str(seed) + ".png")
                 
             v_print("Done generating graphs ({:.1f} secs)".format(time.time() - t0))
+        
+        v_print("Finished experiment ({:.1f} secs)".format(time.time() - t0))
 
         return acc_list, acc_un_list, time_exp
     else:

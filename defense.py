@@ -78,9 +78,9 @@ def generate_observations(full_data_client, def_params, real_queries):
     elif def_params['name'] == 'pancake':
 
         trace_type = 'tok_vol'
+
         freal = utils.get_steady_state(full_data_client['frequencies']) if full_data_client['frequencies'].ndim == 2 else full_data_client['frequencies']
         prob_reals, prob_dummies, replicas_per_kw = utils.compute_pancake_parameters(nkw, freal)
-        print("sum(replicas_per_kw[0:250])", sum(replicas_per_kw[0:250]))
 
         # some imprecision in calculating prob_reals above causes some values to be very small negative numbers,
         # which then was causing errors later in the attack when we expect probabilities to be nonnegative
@@ -89,7 +89,58 @@ def generate_observations(full_data_client, def_params, real_queries):
         # We prevent pancake from shuffling the order of replicas to keep keyword replicas, document replicas, and dummy replicas in their own continuous blocks
         permutation = list(range(2*nkw)) #np.random.permutation(2 * nkw)
         aux = [0] + list(np.cumsum(replicas_per_kw, dtype=int))
-        kw_id_to_replica = [tuple(permutation[aux[i]: aux[i + 1]]) for i in range(len(aux) - 1)]
+        kw_id_to_replica = [tuple(permutation[aux[i]: aux[i + 1]]) for i in range(len(aux) - 1)] # kw_id_to_replica[id] is a tuple w all replicas matching kw id
+        # print("kw_id_to_replica[0:100]", kw_id_to_replica[:100])
+
+        
+        # SWAT
+        from config import NQR, THETA
+
+        que = SamplingPool(2, None)
+        cnt = 0
+
+        real_and_dummy_queries = []
+
+        q_szs = {}
+
+        for q in real_queries:
+            if (len(real_and_dummy_queries) >= NQR): continue
+
+            # for debug, delete
+            if (len(real_and_dummy_queries)%100_000 == 0): print(len(real_and_dummy_queries), "observations generated")
+        
+            que.put((q, cnt))
+            latencies = []
+            for i in range(3):
+                delta = 0.5
+                type = np.random.choice([0, 1], p=[delta, 1-delta])
+                if type == 0:
+                    idx = np.random.choice(nkw+1, p=prob_dummies) # self.keys_new
+                    key_ = np.random.choice(kw_id_to_replica[idx])
+                else:
+                    if que.qsize() <= THETA:
+                        idx = np.random.choice(nkw+1, p=prob_reals) # np.arange(self.n)
+                        key_ = np.random.choice(kw_id_to_replica[idx])
+                    else:
+                        key_, cnt_ = que.get()
+                        latencies.append(cnt - cnt_)
+                real_and_dummy_queries.append(key_)
+                traces.append((key_, 1))
+                
+                if que.qsize() not in q_szs: q_szs[que.qsize()] = 0
+                q_szs[que.qsize()] += 1
+            cnt+=1        
+        
+        print("real_and_dummy_queries[:100]:", real_and_dummy_queries[:100])
+        print(q_szs)
+
+        observations['traces'] = traces
+        observations['trace_type'] = trace_type
+        observations['ndocs'] = len(dataset)
+        bw_overhead = 3
+
+        return observations, bw_overhead, real_and_dummy_queries
+        # End SWAT
 
         nq = len(real_queries)
         perm = np.random.permutation(3 * nq)
@@ -131,3 +182,41 @@ def generate_observations(full_data_client, def_params, real_queries):
     observations['ndocs'] = len(dataset)
 
     return observations, bw_overhead, real_and_dummy_queries
+
+
+class SamplingPool: 
+    def __init__(self, initNum = 0, update = None):
+        self.pool = [] 
+        self.initNum = initNum
+        self.update = update
+        self.weight = []
+        self.q_szs = {}
+    
+    def get(self):
+        ret = 0
+        if self.update is None:
+            t = np.random.randint(0, len(self.pool))
+            ret = self.pool.pop(t)
+        elif self.update == "Linear":
+            t = np.random.choice(np.arange(len(self.pool)), 
+                                p=np.array(self.weight) / np.sum(self.weight))
+            ret = self.pool.pop(t)
+            self.weight.pop(t)
+            self.weight = [x + 3 for x in self.weight]
+        elif self.update == "Exp":
+            t = np.random.choice(np.arange(len(self.pool)),
+                                p=np.array(self.weight) / np.sum(self.weight))
+            ret = self.pool.pop(t)
+            self.weight.pop(t)
+            self.weight = [x * 5 for x in self.weight]
+        return ret 
+    
+    def qsize(self):
+        return len(self.pool)
+    
+    def empty(self) -> bool: 
+        return len(self.pool) <= self.initNum
+    
+    def put(self, x): 
+        self.pool.append(x) 
+        self.weight.append(1)

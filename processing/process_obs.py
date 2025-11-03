@@ -66,14 +66,26 @@ def compute_Fobs(def_name, token_trace, n_tokens):
     counter = Counter(token_trace[:-1])  # We do not take the last one, because we do not know the transition from that one
 
     # print("token_trace[0:100]:", token_trace[0:100])
+    
+    from config import THETA
 
     if def_name != 'pancake':
         mj_test = np.histogram2d(token_trace[1:], token_trace[:-1], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0] / (len(token_trace) - 1)
     else:
         mj_test = np.zeros((n_tokens, n_tokens))
-        for i in range(3):
-            for j in range(3):
-                mj_test += np.histogram2d(token_trace[3 + i::3], token_trace[j:-3:3], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0]
+
+        lst_for_tk = []
+
+        for token_from_index in range(len(token_trace)):
+            for d in range(-3*THETA, 3*(THETA+1)):
+                token_to_index = token_from_index + d
+                if (token_to_index < 0 or token_to_index >= len(token_trace)): continue
+
+                mj_test[token_trace[token_to_index]][token_trace[token_from_index]] += 1
+                if (token_from_index == 23489): lst_for_tk.append((token_trace[token_from_index], token_trace[token_to_index]))
+
+        print("lst_for_tk:", lst_for_tk)
+        print("sum:", np.sum(mj_test), "len(token_trace):", len(token_trace))
     
     if MOD_FOBS:
         # values are hardcoded for now while I determine how to get total number of kw/doc/dummy replicas
@@ -122,7 +134,7 @@ def process_traces(obs, aux, def_params):
         seen_id_to_token_id = {}
         token_info = {}
         token_id = 0
-        
+
         for id, ap in traces:
             ap_sorted = tuple(sorted(ap))
             if id not in seen_id_to_token_id:
@@ -131,7 +143,7 @@ def process_traces(obs, aux, def_params):
                 token_id += 1
             token_trace.append(seen_id_to_token_id[id])
             # Don't rename seen tokens, so when we generate Fobs we know which replicas are kws/docs/dummies
-            #token_trace.append(id)
+            # token_trace.append(id)
         return token_trace, token_info
 
     def _process_traces_with_search_pattern_leakage_given_volume(traces):

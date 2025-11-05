@@ -67,25 +67,33 @@ def compute_Fobs(def_name, token_trace, n_tokens):
 
     # print("token_trace[0:100]:", token_trace[0:100])
     
-    from config import THETA
+    from config import USE_THETA_DECORR, THETA
 
     if def_name != 'pancake':
         mj_test = np.histogram2d(token_trace[1:], token_trace[:-1], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0] / (len(token_trace) - 1)
     else:
-        mj_test = np.zeros((n_tokens, n_tokens))
+        if not USE_THETA_DECORR:
+            mj_test = np.zeros((n_tokens, n_tokens))
+            for i in range(3):
+                for j in range(3):
+                    mj_test += np.histogram2d(token_trace[3 + i::3], token_trace[j:-3:3], bins=(range(n_tokens + 1), range(n_tokens + 1)))[0]
+        else:
+            mj_test = np.zeros((n_tokens, n_tokens))
 
-        lst_for_tk = []
+            lst_for_tk = []
 
-        for token_from_index in range(len(token_trace)):
-            for d in range(-3*THETA, 3*(THETA+1)):
-                token_to_index = token_from_index + d
-                if (token_to_index < 0 or token_to_index >= len(token_trace)): continue
+            for token_from_index in range(len(token_trace)):
+                for d in range(-3*THETA, 3*(THETA+1)):
+                    token_to_index = token_from_index + d
+                    if (token_to_index < 0 or token_to_index >= len(token_trace)): continue
 
-                mj_test[token_trace[token_to_index]][token_trace[token_from_index]] += 1
-                if (token_from_index == 23489): lst_for_tk.append((token_trace[token_from_index], token_trace[token_to_index]))
+                    if (token_to_index == token_from_index): continue # don't count transitions from a token to itself??
 
-        print("lst_for_tk:", lst_for_tk)
-        print("sum:", np.sum(mj_test), "len(token_trace):", len(token_trace))
+                    mj_test[token_trace[token_to_index]][token_trace[token_from_index]] += 1
+                    if (token_from_index == 23489): lst_for_tk.append((token_trace[token_from_index], token_trace[token_to_index]))
+
+            print("lst_for_tk:", lst_for_tk)
+            print("sum:", np.sum(mj_test), "len(token_trace):", len(token_trace))
     
     if MOD_FOBS:
         # values are hardcoded for now while I determine how to get total number of kw/doc/dummy replicas

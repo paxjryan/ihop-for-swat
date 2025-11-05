@@ -92,87 +92,42 @@ def generate_observations(full_data_client, def_params, real_queries):
         kw_id_to_replica = [tuple(permutation[aux[i]: aux[i + 1]]) for i in range(len(aux) - 1)] # kw_id_to_replica[id] is a tuple w all replicas matching kw id
         # print("kw_id_to_replica[0:100]", kw_id_to_replica[:100])
 
+        bw_overhead = 3
         
         # SWAT
-        from config import NQR, THETA
+        from config import USE_THETA_DECORR
+        if (USE_THETA_DECORR):
+            traces, real_and_dummy_queries = generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, prob_dummies)
+        else:
+            nq = len(real_queries)
+            perm = np.random.permutation(3 * nq)
+            separation = np.random.binomial(3 * nq, 0.5)
+            indices_real_slots, indices_dummy_slots = perm[:separation], perm[separation:]
+            indices_real_slots.sort()
+            indices_for_each_true_message = []
+            real_slots_copy = indices_real_slots.copy()
+            for i in range(0, 3 * nq, 3):
+                try:
+                    index = next(filter(lambda x: real_slots_copy[x] >= i, range(len(real_slots_copy))))
+                except StopIteration:
+                    break
+                indices_for_each_true_message.append(real_slots_copy[index])
+                real_slots_copy = real_slots_copy[(index + 1):]
 
-        que = SamplingPool(2, None)
-        cnt = 0
+            trace_no_replicas = -np.ones(3 * nq, dtype=int)
+            trace_no_replicas[indices_dummy_slots] = np.random.choice(nkw + 1, len(indices_dummy_slots), replace=True, p=prob_dummies)
+            trace_no_replicas[indices_real_slots] = np.random.choice(nkw + 1, len(indices_real_slots), replace=True, p=prob_reals)
+            trace_no_replicas[indices_for_each_true_message] = real_queries[:len(indices_for_each_true_message)]
 
-        real_and_dummy_queries = []
+            for kw_id in trace_no_replicas:
+                traces.append((np.random.choice(kw_id_to_replica[kw_id]), 1))  # Volume is 1
+            
+            # print("kw_id_to_replica[250]", kw_id_to_replica[250])
+            # print("real_queries[0:100]", real_queries[0:100])
+            # print("indices_for_each_true_message[0:100]", indices_for_each_true_message[0:100])
+            # print("traces[0:100]:", traces[0:100]) #np.take(traces, indices_for_each_true_message)[0:100])
 
-        q_szs = {}
-
-        for q in real_queries:
-            if (len(real_and_dummy_queries) >= NQR): continue
-
-            # for debug, delete
-            if (len(real_and_dummy_queries)%100_000 == 0): print(len(real_and_dummy_queries), "observations generated")
-        
-            que.put((q, cnt))
-            latencies = []
-            for i in range(3):
-                delta = 0.5
-                type = np.random.choice([0, 1], p=[delta, 1-delta])
-                if type == 0:
-                    idx = np.random.choice(nkw+1, p=prob_dummies) # self.keys_new
-                    key_ = np.random.choice(kw_id_to_replica[idx])
-                else:
-                    if que.qsize() <= THETA:
-                        idx = np.random.choice(nkw+1, p=prob_reals) # np.arange(self.n)
-                        key_ = np.random.choice(kw_id_to_replica[idx])
-                    else:
-                        key_, cnt_ = que.get()
-                        latencies.append(cnt - cnt_)
-                real_and_dummy_queries.append(key_)
-                traces.append((key_, 1))
-                
-                if que.qsize() not in q_szs: q_szs[que.qsize()] = 0
-                q_szs[que.qsize()] += 1
-            cnt+=1        
-        
-        print("real_and_dummy_queries[:100]:", real_and_dummy_queries[:100])
-        print(q_szs)
-
-        observations['traces'] = traces
-        observations['trace_type'] = trace_type
-        observations['ndocs'] = len(dataset)
-        bw_overhead = 3
-
-        return observations, bw_overhead, real_and_dummy_queries
-        # End SWAT
-
-        nq = len(real_queries)
-        perm = np.random.permutation(3 * nq)
-        separation = np.random.binomial(3 * nq, 0.5)
-        indices_real_slots, indices_dummy_slots = perm[:separation], perm[separation:]
-        indices_real_slots.sort()
-        indices_for_each_true_message = []
-        real_slots_copy = indices_real_slots.copy()
-        for i in range(0, 3 * nq, 3):
-            try:
-                index = next(filter(lambda x: real_slots_copy[x] >= i, range(len(real_slots_copy))))
-            except StopIteration:
-                break
-            indices_for_each_true_message.append(real_slots_copy[index])
-            real_slots_copy = real_slots_copy[(index + 1):]
-
-        trace_no_replicas = -np.ones(3 * nq, dtype=int)
-        trace_no_replicas[indices_dummy_slots] = np.random.choice(nkw + 1, len(indices_dummy_slots), replace=True, p=prob_dummies)
-        trace_no_replicas[indices_real_slots] = np.random.choice(nkw + 1, len(indices_real_slots), replace=True, p=prob_reals)
-        trace_no_replicas[indices_for_each_true_message] = real_queries[:len(indices_for_each_true_message)]
-
-        for kw_id in trace_no_replicas:
-            traces.append((np.random.choice(kw_id_to_replica[kw_id]), 1))  # Volume is 1
-        
-        # print("kw_id_to_replica[250]", kw_id_to_replica[250])
-        # print("real_queries[0:100]", real_queries[0:100])
-        # print("indices_for_each_true_message[0:100]", indices_for_each_true_message[0:100])
-        # print("traces[0:100]:", traces[0:100]) #np.take(traces, indices_for_each_true_message)[0:100])
-
-        real_and_dummy_queries = trace_no_replicas
-
-        bw_overhead = 3
+            real_and_dummy_queries = trace_no_replicas
 
     else:
         raise ValueError("Defense {:s} not implemented".format(def_params['name']))
@@ -182,6 +137,59 @@ def generate_observations(full_data_client, def_params, real_queries):
     observations['ndocs'] = len(dataset)
 
     return observations, bw_overhead, real_and_dummy_queries
+
+
+def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, prob_dummies):
+    from config import NQR, THETA
+
+    que = SamplingPool(THETA, "Exp")
+    q_szs = {} # for debug
+    cnt = 0 # counter; essentially a timestamp
+
+    real_and_dummy_queries = []
+    detailedTranscript = []
+
+    traces = []
+
+    print("len(prob_reals):", len( prob_reals))
+    print("len(prob_dummies):", len(prob_dummies))
+    print("nkw:", nkw)
+
+    for q in real_queries:
+        if (len(real_and_dummy_queries) >= NQR): continue
+
+        # for debug, delete
+        if (len(real_and_dummy_queries)%100_000 == 0): print(len(real_and_dummy_queries), "observations generated")
+    
+        que.put((q, cnt))
+        latencies = []
+        for i in range(3): 
+            delta = 0.5
+            type = np.random.choice([0, 1], p=[delta, 1-delta])
+            if type == 0:
+                idx = np.random.choice(nkw+1, p=prob_dummies) # self.keys_new
+                key_ = np.random.choice(kw_id_to_replica[idx])
+                continue
+            else:
+                if que.qsize() <= THETA:
+                    idx = np.random.choice(nkw+1, p=prob_reals) # np.arange(self.n)
+                    key_ = np.random.choice(kw_id_to_replica[idx])
+                    continue
+                else:
+                    key_, cnt_ = que.get()
+                    latencies.append(cnt - cnt_)
+            real_and_dummy_queries.append(key_)
+            traces.append((key_, 1))
+            detailedTranscript.append( (key_, que.qsize()) )
+
+            if que.qsize() not in q_szs: q_szs[que.qsize()] = 0
+            q_szs[que.qsize()] += 1
+        cnt+=1        
+    
+    print("real_and_dummy_queries[:100]:", detailedTranscript[:100])
+    print(q_szs)
+
+    return traces, real_and_dummy_queries
 
 
 class SamplingPool: 

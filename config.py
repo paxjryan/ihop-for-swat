@@ -10,7 +10,8 @@ NITERS = 100
 NITER_LIST = [0, 100] #, 500, 1000] #, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 PFREE = 0.25
 
-THETA = 2
+USE_THETA_DECORR = True
+THETA = 0
 
 EXPERIMENT_NAME = 'test'
 EXPERIMENT_FOLDER = 'out/' + EXPERIMENT_NAME + '/'
@@ -26,7 +27,7 @@ HIGH_CORR_PERMUTE = False # If CORR_LEVEL = 'high' and HIGH_CORR_PERMUTE = True,
 DISPLAY_ACC_VECTORS = False
 SAVE_ACC_VECTORS = False
 
-BASE_SEED = 51 # debug.py runs deterministically; introduce randomness in case a run gets interrupted and we want to restart without redoing all of the previously-done randomness
+BASE_SEED = 52 # debug.py runs deterministically; introduce randomness in case a run gets interrupted and we want to restart without redoing all of the previously-done randomness
 
 # process_aux.py
 DISPLAY_AUX_GRAPH = False

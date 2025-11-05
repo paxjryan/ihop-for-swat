@@ -169,12 +169,12 @@ def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, p
             if type == 0:
                 idx = np.random.choice(nkw+1, p=prob_dummies) # self.keys_new
                 key_ = np.random.choice(kw_id_to_replica[idx])
-                continue
+                
             else:
                 if que.qsize() <= THETA:
                     idx = np.random.choice(nkw+1, p=prob_reals) # np.arange(self.n)
                     key_ = np.random.choice(kw_id_to_replica[idx])
-                    continue
+                    
                 else:
                     key_, cnt_ = que.get()
                     latencies.append(cnt - cnt_)

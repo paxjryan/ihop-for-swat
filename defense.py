@@ -106,7 +106,8 @@ def generate_observations(full_data_client, def_params, real_queries):
             indices_real_slots.sort()
             indices_for_each_true_message = []
             real_slots_copy = indices_real_slots.copy()
-            for i in range(0, 3 * nq, 3):
+            for i in range(0, 3 * nq, 3):   # maximum number of real slots chosen before reaching query i in nq is i/3 slots;
+                                            # models injecting a new query from real_queries once every 3 requests
                 try:
                     index = next(filter(lambda x: real_slots_copy[x] >= i, range(len(real_slots_copy))))
                 except StopIteration:
@@ -151,9 +152,8 @@ def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, p
 
     traces = []
 
-    print("len(prob_reals):", len( prob_reals))
-    print("len(prob_dummies):", len(prob_dummies))
     print("nkw:", nkw)
+    print("real_queries[:25]", real_queries[:25])
 
     for q in real_queries:
         if (len(real_and_dummy_queries) >= NQR): continue
@@ -167,30 +167,31 @@ def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, p
             delta = 0.5
             type = np.random.choice([0, 1], p=[delta, 1-delta])
             if type == 0:
-                idx = np.random.choice(nkw+1, p=prob_dummies) # self.keys_new
-                key_ = np.random.choice(kw_id_to_replica[idx])
-                
+                idx = np.random.choice(nkw+1, p=prob_dummies)
             else:
                 if que.qsize() <= THETA:
-                    idx = np.random.choice(nkw+1, p=prob_reals) # np.arange(self.n)
-                    key_ = np.random.choice(kw_id_to_replica[idx])
-                    
-                else:
-                    key_, cnt_ = que.get()
+                    idx, cnt_ = que.get()
                     latencies.append(cnt - cnt_)
-            real_and_dummy_queries.append(key_)
-            traces.append((key_, 1))
-            detailedTranscript.append( (key_, que.qsize()) )
+                    type = 0 # not a real query from transcript
+                else:
+                    idx = np.random.choice(nkw+1, p=prob_reals)
+            
+            key_ = np.random.choice(kw_id_to_replica[idx])
 
+            real_and_dummy_queries.append(idx)
+            traces.append((key_, 1))
+
+            # for debug
+            detailedTranscript.append( (idx, key_, type == True) )
             if que.qsize() not in q_szs: q_szs[que.qsize()] = 0
             q_szs[que.qsize()] += 1
+
         cnt+=1        
     
-    print("real_and_dummy_queries[:100]:", detailedTranscript[:100])
-    print(q_szs)
+    print("First 100 queries (key, replica, isRealQueryFromTranscript):", detailedTranscript[:100])
+    # print(q_szs)
 
     return traces, real_and_dummy_queries
-
 
 class SamplingPool: 
     def __init__(self, initNum = 0, update = None):

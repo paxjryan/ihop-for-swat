@@ -169,7 +169,7 @@ def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, p
             if type == 0:
                 idx = np.random.choice(nkw+1, p=prob_dummies)
             else:
-                if que.qsize() <= THETA:
+                if que.qsize() > THETA:
                     idx, cnt_ = que.get()
                     latencies.append(cnt - cnt_)
                     type = 0 # not a real query from transcript

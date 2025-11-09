@@ -141,9 +141,9 @@ def generate_observations(full_data_client, def_params, real_queries):
 
 
 def generate_theta_decorr_obs(nkw, kw_id_to_replica, real_queries, prob_reals, prob_dummies):
-    from config import NQR, THETA
+    from config import NQR, THETA, SAMPLING_FUNC
 
-    que = SamplingPool(THETA, "Exp")
+    que = SamplingPool(THETA, SAMPLING_FUNC)
     q_szs = {} # for debug
     cnt = 0 # counter; essentially a timestamp
 

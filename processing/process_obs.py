@@ -83,11 +83,16 @@ def compute_Fobs(def_name, token_trace, n_tokens):
             lst_for_tk = []
 
             for token_from_index in range(len(token_trace)):
-                for d in range(-3*THETA, 3*(THETA+1)):
-                    token_to_index = token_from_index + d
-                    if (token_to_index < 0 or token_to_index >= len(token_trace)): continue
+                window_start = max(0, token_from_index - 3*(THETA+1) )
+                window_start = window_start - window_start % 3 # round down to nearest multiple of 3 for batching behavior
+                window_len = 3*(1 + 2*(THETA+1))
+                window_end = min(len(token_trace)-1, window_start + window_len)
 
-                    if (token_to_index == token_from_index): continue # don't count transitions from a token to itself??
+                # for d in range(-3*(THETA+1), 3*(THETA+1+1)):
+                    # token_to_index = token_from_index + d
+                    # if (token_to_index < 0 or token_to_index >= len(token_trace)): continue
+                for token_to_index in range(window_start, window_end):
+                    if (token_to_index == token_from_index): continue # don't count transitions from a token to itself
 
                     mj_test[token_trace[token_to_index]][token_trace[token_from_index]] += 1
                     if (token_from_index == 23489): lst_for_tk.append((token_trace[token_from_index], token_trace[token_to_index]))

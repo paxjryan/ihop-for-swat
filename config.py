@@ -5,15 +5,17 @@ PRO_DATASET_FOLDER = 'datasets_pro'
 # debug.py
 DEFENSE = 'pancake'
 NKW = 250
-NQR = 100_000
-NITERS = 100
-NITER_LIST = [0, 100] #, 500, 1000] #, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+NQR = 5_000_000
+NITERS = 10_000
+NITER_LIST = [0, 100, 500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
 PFREE = 0.25
 
 USE_THETA_DECORR = True
-THETA = 0
+THETA = 1               # can't sample from pool until pool size > THETA (following initial SWAT implementation in decorr.py)
+BATCH_MULT = 2          # number of batches on either side of current batch to count in transition matrix
+SAMPLING_FUNC = "Exp"   # sampling pool strategy (None, "Linear", "Exp")
 
-EXPERIMENT_NAME = 'test'
+EXPERIMENT_NAME = 'Swat10k5MTheta1Mult2'
 EXPERIMENT_FOLDER = 'out/' + EXPERIMENT_NAME + '/'
 NRUNS = 1 # 10
 
@@ -27,7 +29,7 @@ HIGH_CORR_PERMUTE = False # If CORR_LEVEL = 'high' and HIGH_CORR_PERMUTE = True,
 DISPLAY_ACC_VECTORS = False
 SAVE_ACC_VECTORS = False
 
-BASE_SEED = 52 # debug.py runs deterministically; introduce randomness in case a run gets interrupted and we want to restart without redoing all of the previously-done randomness
+BASE_SEED = 58 # debug.py runs deterministically; introduce randomness in case a run gets interrupted and we want to restart without redoing all of the previously-done randomness
 
 # process_aux.py
 DISPLAY_AUX_GRAPH = False

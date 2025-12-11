@@ -1,3 +1,8 @@
+Senior research project: A fork of IHOP (Oya and Kerschbaum, 2022) that uses an expanded windowing strategy to combat SWAT's theta-decorrelation technique (Zheng et al., 2024) 
+
+---
+
+
 This repository contains the code to evaluate query recovery attacks in Searchable Symmetric Encryption (SSE) schemes in the paper:
 
 * Simon Oya and Florian Kerschbaum. *"IHOP: Improved Statistical Query Recovery against Searchable Symmetric Encryption through Quadratic Optimization."* (USENIX 2022).
